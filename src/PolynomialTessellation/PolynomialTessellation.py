@@ -1,14 +1,65 @@
 import numpy as np
 import itertools
 from collections import defaultdict
+from regex import P
 from scipy.spatial import Voronoi
 import scipy
 
 
+class OneDTessellation:
+    def __init__(self, mu, ratio = None, c = None):
+        if (ratio is None) == (c is None):
+            raise ValueError(f'Provide only one of \'ratio\' or \'c\'. ratio: {ratio}, c: {c}')
+        if c is not None:
+            self.Ratio = c / (1 + c)
+        elif ratio is not None:
+            self.Ratio = ratio
+        self.C = self.Ratio / (1 - self.Ratio)
+        self.Points = mu.reshape((-1,))
+        
+    def __call__(self, x):
+        i = np.argmin(np.abs(self.Points - x))
+        p = self.Points[i]
+        if x - p >= 0:
+            l = p
+            if i < len(self.Points) - 1:
+                r = self.Points[i+1]
+            else:
+                r = None
+        else:
+            r = p
+            if i > 0:
+                l = self.Points[i-1]
+            else:
+                l = None
+        return self.eval_region(x, l, r)
+    
+    def eval_region(self, x, l, r):
+        if r is None:
+            return (x - l)**2, x - l, 2
+        elif l is None:
+            return (x - r)**2, x - r, 2
+        
+        m = (l + r) / 2
+        d = r - l
+        if abs(x - m) <= d * (1 - self.Ratio) / 2:
+            return (d / 2)**2 * (self.Ratio**2 * (1 + self.C) + self.C * (1 - 2 * self.Ratio))  - self.C * (x - m)**2, -self.C * (x - m), self.C
+        
+        if abs(x - l) <= abs(x - r):
+            return (x - l)**2, x - l, 2
+        else:
+            return (x - r)**2, x - r, 2
+        
+        
+
 class PolynomialTessellation:
-    def __init__(self, mu, ratio = 0.5, max_dist = 20):
-        self.Ratio = ratio
-        max_dist = 20
+    def __init__(self, mu, ratio = None, c = None, max_dist = 20):
+        if (ratio is None) == (c is None):
+            raise ValueError(f'Provide only one of \'ratio\' or \'c\'. ratio: {ratio}, c: {c}')
+        if c is not None:
+            self.Ratio = c / (1 + c)
+        elif ratio is not None:
+            self.Ratio = ratio
         self.InitialCount = len(mu)
         boundaries = []
         for combo in itertools.product(*(((-1.,1.),) * len(mu[0]))):
